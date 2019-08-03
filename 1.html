@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title></title>
+  <style media="screen">
+    body {
+      background: black;
+      text-align: center;
+    }
+    #c1 {
+      background: url(img/game_bg_2_hd.jpg);
+    }
+  </style>
+  <script src="js/resources.js" charset="utf-8"></script>
+  <script src="js/common.js" charset="utf-8"></script>
+  <script src="js/Spirit.js" charset="utf-8"></script>
+  <script src="js/Fish.js" charset="utf-8"></script>
+  <script src="js/Cannon.js" charset="utf-8"></script>
+  <script src="js/Bullet.js" charset="utf-8"></script>
+  <script src="js/Button.js" charset="utf-8"></script>
+  <script src="js/Coin.js" charset="utf-8"></script>
+  <script src="jquery.js" charset="utf-8"></script>
+  <script>
+    //const $=document.querySelectorAll.bind(document);
+    window.onload = async function () {
+      let oC = $('#c1')[0];
+      let W = oC.width, H = oC.height;
+      let gd = oC.getContext('2d');
+
+      try {
+        imgs = await loadResources();
+      } catch (e) {
+        alert('加载失败，请刷新重试');
+      }
+
+      //底座
+      let data_bar = __g_resouce['bottom'].bottom_bar
+      let bottom_bar = new Spirit({
+        img: data_bar.img,
+        w: data_bar.frame.w,
+        h: data_bar.frame.h,
+        sx: data_bar.frame.x,
+        sy: data_bar.frame.y,
+        x: 400,
+        y: 566
+      });
+
+      //炮
+      let cannon = new Cannon(1);
+      cannon.x = 442;
+      cannon.y = 572;
+
+      //炮-跟着鼠标转
+      oC.onmousemove = function (ev) {
+        let a = ev.offsetX - cannon.x;
+        let b = ev.offsetY - cannon.y;
+
+        cannon.rotation = Math.atan2(b, a) * 180 / Math.PI + 90;
+      };
+
+      //炮-开炮
+      let bullets = [];
+      let last_fire = 0;
+      let firing = false;
+      oC.onclick = function (ev) {
+        let now = Date.now();
+        if (now - last_fire < 0.5) {            //////
+          return;
+        }
+        last_fire = now;
+        firing = true;
+
+        let bullet = new Bullet(cannon.type);
+
+        bullet.x = cannon.x;
+        bullet.y = cannon.y;
+
+        bullet.rotation = cannon.rotation;
+
+        bullets.push(bullet);
+      };
+
+      //炮-按钮
+      let btnMinus = new Button(__g_resouce['bottom'].cannon_minus, __g_resouce['bottom'].cannon_minus_down);
+      let btnPlus = new Button(__g_resouce['bottom'].cannon_plus, __g_resouce['bottom'].cannon_plus_down);
+
+      btnMinus.x = 442 - 50;
+      btnMinus.y = 580;
+
+      btnPlus.x = 442 + 50;
+      btnPlus.y = 580;
+
+      oC.onmousedown = function (ev) {
+        let minus = false;
+        let plus = false;
+
+        if (btnMinus.checkDown(ev.offsetX, ev.offsetY)) {
+          minus = true;
+        }
+
+        if (btnPlus.checkDown(ev.offsetX, ev.offsetY)) {
+          plus = true;
+        }
+
+        //换炮
+        if (minus && cannon.type > 1) {
+          cannon.setType(cannon.type - 1);
+        }
+
+        if (plus && cannon.type < 7) {
+          cannon.setType(cannon.type + 1);
+        }
+      };
+
+      //鱼
+      let fishs = [];
+      setInterval(function () {
+        if (Math.random() < 0.02) {
+          let fish = new Fish(rndInt(1, 6));
+
+          if (Math.random() < 0.5) {
+            fish.x = -100;
+            fish.y = rndInt(0, H);
+            fish.rotation = rnd(70, 110);
+          } else {
+            fish.x = W + 100;
+            fish.y = rndInt(0, H);
+            fish.rotation = rnd(-110, -70);
+            fish.scaleY = -1;
+          }
+
+          fishs.push(fish);
+        }
+      }, 2);
+
+      oC.onmouseup = function (ev) {
+        btnMinus.checkUp(ev.offsetX, ev.offsetY);
+        btnPlus.checkUp(ev.offsetX, ev.offsetY);
+      };
+
+      //金币
+      let coins = [];
+
+      requestAnimationFrame(next);
+      function next() {
+        //1.清除
+        gd.clearRect(0, 0, oC.width, oC.height);
+
+        //2.移动
+        if (firing) {
+          if (true == cannon.nextFrame()) {
+            firing = false;
+          }
+        }
+
+        bullets.forEach(bullet => bullet.move());
+        fishs.forEach(fish => fish.move());
+        fishs.forEach(fish => fish.nextFrame());
+        coins.forEach(coin => coin.nextFrame());
+
+
+        bullets = bullets.filter(bullet => !bullet.outOfCanvas(W, H));
+        fishs = fishs.filter(fish => !fish.outOfCanvas(W, H));
+
+        //3.检测碰撞
+        fishs.forEach((fish, f_index) => {
+          bullets.forEach((bullet, b_index) => {
+            if (fish.collTest(bullet)) {
+              //消失
+              // bullets.splice(b_index, 1);
+              fishs.splice(f_index, 1);
+
+              //币
+              let coin = new Coin(2);
+              coin.x = fish.x;
+              coin.y = fish.y;
+
+              coins.push(coin);
+              setTimeout(() => {
+                coins.pop(coin)
+              }, 250)
+
+            }
+          });
+        });
+
+        //4.绘制
+        bottom_bar.draw(gd);
+        bullets.forEach(bullet => bullet.draw(gd));
+        fishs.forEach(fish => fish.draw(gd));
+        coins.forEach(coin => coin.draw(gd));
+        cannon.draw(gd);
+        btnMinus.draw(gd);
+        btnPlus.draw(gd);
+
+        requestAnimationFrame(next);
+      }
+    };
+  </script>
+</head>
+
+<body>
+  <canvas id="c1" width="800" height="600"></canvas>
+</body>
+
+</html>
